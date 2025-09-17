@@ -6,8 +6,8 @@
 	Feel free to use this in your own games, and I'd love to see anything you make!
  */
 
-using System.Collections;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class PlayerMovement : MonoBehaviour
 {
@@ -17,7 +17,9 @@ public class PlayerMovement : MonoBehaviour
 	//HOW TO: to add the scriptable object, right-click in the project window -> create -> Player Data
 	//Next, drag it into the slot in playerMovement on your player
 
-	public PlayerData Data;
+        public PlayerData Data;
+
+        private PlayerControls _playerControls;
 
 	#region Variables
 	//Components
@@ -63,15 +65,48 @@ public class PlayerMovement : MonoBehaviour
 	#endregion
 
     private void Awake()
-	{
-		RB = GetComponent<Rigidbody2D>();
-	}
+        {
+                RB = GetComponent<Rigidbody2D>();
+                _playerControls = new PlayerControls();
+        }
 
-	private void Start()
-	{
-		SetGravityScale(Data.gravityScale);
-		IsFacingRight = true;
-	}
+        private void OnEnable()
+        {
+                if (_playerControls == null)
+                        _playerControls = new PlayerControls();
+
+                var gameplay = _playerControls.Gameplay;
+                gameplay.Enable();
+                gameplay.Move.performed += HandleMovePerformed;
+                gameplay.Move.canceled += HandleMoveCanceled;
+                gameplay.Jump.started += HandleJumpStarted;
+                gameplay.Jump.canceled += HandleJumpCanceled;
+        }
+
+        private void OnDisable()
+        {
+                if (_playerControls == null)
+                        return;
+
+                var gameplay = _playerControls.Gameplay;
+                gameplay.Move.performed -= HandleMovePerformed;
+                gameplay.Move.canceled -= HandleMoveCanceled;
+                gameplay.Jump.started -= HandleJumpStarted;
+                gameplay.Jump.canceled -= HandleJumpCanceled;
+                gameplay.Disable();
+                _moveInput = Vector2.zero;
+        }
+
+        private void Start()
+        {
+                SetGravityScale(Data.gravityScale);
+                IsFacingRight = true;
+        }
+
+        private void OnDestroy()
+        {
+                _playerControls?.Dispose();
+        }
 
 	private void Update()
 	{
@@ -84,23 +119,10 @@ public class PlayerMovement : MonoBehaviour
 		LastPressedJumpTime -= Time.deltaTime;
 		#endregion
 
-		#region INPUT HANDLER
-		_moveInput.x = Input.GetAxisRaw("Horizontal");
-		_moveInput.y = Input.GetAxisRaw("Vertical");
-
-		if (_moveInput.x != 0)
-			CheckDirectionToFace(_moveInput.x > 0);
-
-		if(Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.C) || Input.GetKeyDown(KeyCode.J))
-        {
-			OnJumpInput();
-        }
-
-		if (Input.GetKeyUp(KeyCode.Space) || Input.GetKeyUp(KeyCode.C) || Input.GetKeyUp(KeyCode.J))
-		{
-			OnJumpUpInput();
-		}
-		#endregion
+                #region INPUT HANDLER
+                if (_moveInput.x != 0)
+                        CheckDirectionToFace(_moveInput.x > 0);
+                #endregion
 
 		#region COLLISION CHECKS
 		if (!IsJumping)
@@ -217,10 +239,10 @@ public class PlayerMovement : MonoBehaviour
     }
 
     private void FixedUpdate()
-	{
-		//Handle Run
-		if (IsWallJumping)
-			Run(Data.wallJumpRunLerp);
+        {
+                //Handle Run
+                if (IsWallJumping)
+                        Run(Data.wallJumpRunLerp);
 		else
 			Run(1);
 
@@ -230,17 +252,37 @@ public class PlayerMovement : MonoBehaviour
     }
 
     #region INPUT CALLBACKS
-	//Methods which whandle input detected in Update()
+        //Methods which whandle input detected in Update()
     public void OnJumpInput()
-	{
-		LastPressedJumpTime = Data.jumpInputBufferTime;
-	}
+        {
+                LastPressedJumpTime = Data.jumpInputBufferTime;
+        }
 
-	public void OnJumpUpInput()
-	{
-		if (CanJumpCut() || CanWallJumpCut())
-			_isJumpCut = true;
-	}
+        public void OnJumpUpInput()
+        {
+                if (CanJumpCut() || CanWallJumpCut())
+                        _isJumpCut = true;
+        }
+
+        private void HandleMovePerformed(InputAction.CallbackContext context)
+        {
+                _moveInput = context.ReadValue<Vector2>();
+        }
+
+        private void HandleMoveCanceled(InputAction.CallbackContext context)
+        {
+                _moveInput = context.ReadValue<Vector2>();
+        }
+
+        private void HandleJumpStarted(InputAction.CallbackContext context)
+        {
+                OnJumpInput();
+        }
+
+        private void HandleJumpCanceled(InputAction.CallbackContext context)
+        {
+                OnJumpUpInput();
+        }
     #endregion
 
     #region GENERAL METHODS

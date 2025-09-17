@@ -8,12 +8,15 @@
 
 using System.Collections;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class PlayerMovement : MonoBehaviour
 {
 	//Scriptable object which holds all the player's movement parameters. If you don't want to use it
 	//just paste in all the parameters, though you will need to manuly change all references in this script
-	public PlayerDataWithDash Data;
+        public PlayerDataWithDash Data;
+
+        private PlayerControls _playerControls;
 
 	#region COMPONENTS
     public Rigidbody2D RB { get; private set; }
@@ -76,15 +79,50 @@ public class PlayerMovement : MonoBehaviour
 	#endregion
 
     private void Awake()
-	{
-		RB = GetComponent<Rigidbody2D>();
-	}
+        {
+                RB = GetComponent<Rigidbody2D>();
+                _playerControls = new PlayerControls();
+        }
 
-	private void Start()
-	{
-		SetGravityScale(Data.gravityScale);
-		IsFacingRight = true;
-	}
+        private void OnEnable()
+        {
+                if (_playerControls == null)
+                        _playerControls = new PlayerControls();
+
+                var gameplay = _playerControls.Gameplay;
+                gameplay.Enable();
+                gameplay.Move.performed += HandleMovePerformed;
+                gameplay.Move.canceled += HandleMoveCanceled;
+                gameplay.Jump.started += HandleJumpStarted;
+                gameplay.Jump.canceled += HandleJumpCanceled;
+                gameplay.Dash.started += HandleDashStarted;
+        }
+
+        private void OnDisable()
+        {
+                if (_playerControls == null)
+                        return;
+
+                var gameplay = _playerControls.Gameplay;
+                gameplay.Move.performed -= HandleMovePerformed;
+                gameplay.Move.canceled -= HandleMoveCanceled;
+                gameplay.Jump.started -= HandleJumpStarted;
+                gameplay.Jump.canceled -= HandleJumpCanceled;
+                gameplay.Dash.started -= HandleDashStarted;
+                gameplay.Disable();
+                _moveInput = Vector2.zero;
+        }
+
+        private void Start()
+        {
+                SetGravityScale(Data.gravityScale);
+                IsFacingRight = true;
+        }
+
+        private void OnDestroy()
+        {
+                _playerControls?.Dispose();
+        }
 
 	private void Update()
 	{
@@ -98,28 +136,10 @@ public class PlayerMovement : MonoBehaviour
 		LastPressedDashTime -= Time.deltaTime;
 		#endregion
 
-		#region INPUT HANDLER
-		_moveInput.x = Input.GetAxisRaw("Horizontal");
-		_moveInput.y = Input.GetAxisRaw("Vertical");
-
-		if (_moveInput.x != 0)
-			CheckDirectionToFace(_moveInput.x > 0);
-
-		if(Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.C) || Input.GetKeyDown(KeyCode.J))
-        {
-			OnJumpInput();
-        }
-
-		if (Input.GetKeyUp(KeyCode.Space) || Input.GetKeyUp(KeyCode.C) || Input.GetKeyUp(KeyCode.J))
-		{
-			OnJumpUpInput();
-		}
-
-		if (Input.GetKeyDown(KeyCode.X) || Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.K))
-		{
-			OnDashInput();
-		}
-		#endregion
+                #region INPUT HANDLER
+                if (_moveInput.x != 0)
+                        CheckDirectionToFace(_moveInput.x > 0);
+                #endregion
 
 		#region COLLISION CHECKS
 		if (!IsDashing && !IsJumping)
@@ -303,10 +323,35 @@ public class PlayerMovement : MonoBehaviour
 			_isJumpCut = true;
 	}
 
-	public void OnDashInput()
-	{
-		LastPressedDashTime = Data.dashInputBufferTime;
-	}
+        public void OnDashInput()
+        {
+                LastPressedDashTime = Data.dashInputBufferTime;
+        }
+
+        private void HandleMovePerformed(InputAction.CallbackContext context)
+        {
+                _moveInput = context.ReadValue<Vector2>();
+        }
+
+        private void HandleMoveCanceled(InputAction.CallbackContext context)
+        {
+                _moveInput = context.ReadValue<Vector2>();
+        }
+
+        private void HandleJumpStarted(InputAction.CallbackContext context)
+        {
+                OnJumpInput();
+        }
+
+        private void HandleJumpCanceled(InputAction.CallbackContext context)
+        {
+                OnJumpUpInput();
+        }
+
+        private void HandleDashStarted(InputAction.CallbackContext context)
+        {
+                OnDashInput();
+        }
     #endregion
 
     #region GENERAL METHODS
