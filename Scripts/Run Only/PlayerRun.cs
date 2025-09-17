@@ -6,14 +6,16 @@
 	Feel free to use this in your own games, and I'd love to see anything you make!
  */
 
-using System.Collections;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class PlayerRun : MonoBehaviour
 {
 	//Scriptable object which holds all the player's movement parameters. If you don't want to use it
 	//just paste in all the parameters, though you will need to manuly change all references in this script
-	public PlayerRunData Data;
+        public PlayerRunData Data;
+
+        private PlayerControls _playerControls;
 
 	#region COMPONENTS
     public Rigidbody2D RB { get; private set; }
@@ -45,14 +47,53 @@ public class PlayerRun : MonoBehaviour
 	#endregion
 
     private void Awake()
-	{
-		RB = GetComponent<Rigidbody2D>();
-	}
+        {
+                RB = GetComponent<Rigidbody2D>();
+                _playerControls = new PlayerControls();
+        }
 
-	private void Start()
-	{
-		IsFacingRight = true;
-	}
+        private void OnEnable()
+        {
+                if (_playerControls == null)
+                        _playerControls = new PlayerControls();
+
+                var gameplay = _playerControls.Gameplay;
+                gameplay.Enable();
+                gameplay.Move.performed += HandleMovePerformed;
+                gameplay.Move.canceled += HandleMoveCanceled;
+        }
+
+        private void OnDisable()
+        {
+                if (_playerControls == null)
+                        return;
+
+                var gameplay = _playerControls.Gameplay;
+                gameplay.Move.performed -= HandleMovePerformed;
+                gameplay.Move.canceled -= HandleMoveCanceled;
+                gameplay.Disable();
+                _moveInput = Vector2.zero;
+        }
+
+        private void Start()
+        {
+                IsFacingRight = true;
+        }
+
+        private void OnDestroy()
+        {
+                _playerControls?.Dispose();
+        }
+
+        private void HandleMovePerformed(InputAction.CallbackContext context)
+        {
+                _moveInput = context.ReadValue<Vector2>();
+        }
+
+        private void HandleMoveCanceled(InputAction.CallbackContext context)
+        {
+                _moveInput = context.ReadValue<Vector2>();
+        }
 
 	private void Update()
 	{	
@@ -60,12 +101,10 @@ public class PlayerRun : MonoBehaviour
         LastOnGroundTime -= Time.deltaTime;
 		#endregion
 
-		#region INPUT HANDLER
-		_moveInput.x = Input.GetAxisRaw("Horizontal");
-
-		if (_moveInput.x != 0)
-			CheckDirectionToFace(_moveInput.x > 0);
-		#endregion
+                #region INPUT HANDLER
+                if (_moveInput.x != 0)
+                        CheckDirectionToFace(_moveInput.x > 0);
+                #endregion
 
 		#region COLLISION CHECKS
 		//Ground Check
